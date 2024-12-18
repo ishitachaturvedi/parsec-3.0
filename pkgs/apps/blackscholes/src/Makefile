@@ -14,12 +14,14 @@ else
 	SRC	= blackscholes.c
 endif
 
+version="pthreads"
+
 ifdef version
   ifeq "$(version)" "pthreads"
     M4_SRC    = blackscholes.m4.cpp
     CSRC      = $(M4_SRC)
     MT        = -DENABLE_THREADS
-    CXXFLAGS += -pthread
+    CXXFLAGS += -pthread -static -I/home/ishita/gem5-GPU_killer/include -L/home/ishita/gem5-GPU_killer/util/m5/build/arm64/out -lm5
   endif
   ifeq "$(version)" "openmp"
     MT        = -DENABLE_OPENMP
@@ -31,6 +33,11 @@ else
   MT        = 
 endif
 
+
+M4_SRC    = blackscholes.m4.cpp
+CSRC      = $(M4_SRC)
+MT        = -DENABLE_THREADS
+CXXFLAGS += -pthread -static -I/home/ishita/gem5-GPU_killer/include -L/home/ishita/gem5-GPU_killer/util/m5/build/arm64/out -lm5
 
 
 # Default build single precision version

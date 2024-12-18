@@ -46,10 +46,20 @@ using namespace tbb;
 #include <windows.h>
 #endif
 
+int currentIndex = 0; // Shared counter for dynamic work distribution
+pthread_mutex_t counterMutex = PTHREAD_MUTEX_INITIALIZER;
+int chunk_size = 200;
+
+// #define GEM5
+
+// #ifdef GEM5
+// #include "gem5/m5ops.h"
+// #endif
+
 //Precision to use for calculations
 #define fptype float
 
-#define NUM_RUNS 100
+#define NUM_RUNS 1
 
 typedef struct OptionData_ {
         fptype s;          // spot price
@@ -279,33 +289,52 @@ int bs_thread(void *tid_ptr) {
     fptype price;
     fptype priceDelta;
     int tid = *(int *)tid_ptr;
-    int start = tid * (numOptions / nThreads);
-    int end = start + (numOptions / nThreads);
+    // int start = tid * (numOptions / nThreads);
+    // int end = start + (numOptions / nThreads);
 
-    for (j=0; j<NUM_RUNS; j++) {
+    int start, end;
+    while (true) {
+
+        // Fetch next chunk of work
+        pthread_mutex_lock(&counterMutex);
+        start = currentIndex;
+        currentIndex += chunk_size;
+        pthread_mutex_unlock(&counterMutex);
+
+        // If no more work, exit
+        if (start >= numOptions) {
+            break;
+        }
+
+        // Adjust the end to not exceed numOptions
+        end = (start + chunk_size > numOptions) ? numOptions : start + chunk_size;
+
+        printf("tid: %d start:%d end: %d\n",tid,start,end);
+
 #ifdef ENABLE_OPENMP
 #pragma omp parallel for private(i, price, priceDelta)
         for (i=0; i<numOptions; i++) {
-#else  //ENABLE_OPENMP
+    #else  //ENABLE_OPENMP
         for (i=start; i<end; i++) {
-#endif //ENABLE_OPENMP
+    #endif //ENABLE_OPENMP
             /* Calling main function to calculate option value based on 
-             * Black & Scholes's equation.
-             */
+                * Black & Scholes's equation.
+                */
             price = BlkSchlsEqEuroNoDiv( sptprice[i], strike[i],
-                                         rate[i], volatility[i], otime[i], 
-                                         otype[i], 0);
+                                            rate[i], volatility[i], otime[i], 
+                                            otype[i], 0);
             prices[i] = price;
 
-#ifdef ERR_CHK
+    #ifdef ERR_CHK
             priceDelta = data[i].DGrefval - price;
             if( fabs(priceDelta) >= 1e-4 ){
                 printf("Error on %d. Computed=%.5f, Ref=%.5f, Delta=%.5f\n",
-                       i, price, data[i].DGrefval, priceDelta);
+                        i, price, data[i].DGrefval, priceDelta);
                 numError ++;
             }
-#endif
+    #endif
         }
+
     }
 
     return 0;
@@ -334,6 +363,8 @@ int main (int argc, char **argv)
    __parsec_bench_begin(__parsec_blackscholes);
 #endif
 
+    pthread_mutex_init(&counterMutex, NULL);
+
    if (argc != 4)
         {
                 printf("Usage:\n\t%s <nthreads> <inputFile> <outputFile>\n", argv[0]);
@@ -355,10 +386,15 @@ int main (int argc, char **argv)
       fclose(file);
       exit(1);
     }
+
+
     if(nThreads > numOptions) {
       printf("WARNING: Not enough work, reducing number of threads to match number of options.\n");
       nThreads = numOptions;
     }
+
+    printf("Total work %d Threads %d\n",numOptions,nThreads);
+
 
 #if !defined(ENABLE_THREADS) && !defined(ENABLE_OPENMP) && !defined(ENABLE_TBB)
     if(nThreads != 1) {
@@ -437,11 +473,20 @@ int main (int argc, char **argv)
     int *tids;
     tids = (int *) malloc (nThreads * sizeof(int));
 
+    #ifdef GEM5
+        m5_dump_reset_stats(0,0);
+    #endif
+
     for(i=0; i<nThreads; i++) {
         tids[i]=i;
         CREATE_WITH_ARG(bs_thread, &tids[i]);
     }
     WAIT_FOR_END(nThreads);
+
+    #ifdef GEM5
+        m5_dump_reset_stats(0,0);
+    #endif
+
     free(tids);
 #endif //WIN32
 #else //ENABLE_THREADS
