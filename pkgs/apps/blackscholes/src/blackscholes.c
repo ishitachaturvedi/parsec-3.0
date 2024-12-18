@@ -350,6 +350,8 @@ int main (int argc, char **argv)
     int * buffer2;
     int rv;
 
+    printf("STEP 3\n");
+
 #ifdef PARSEC_VERSION
 #define __PARSEC_STRING(x) #x
 #define __PARSEC_XSTRING(x) __PARSEC_STRING(x)
@@ -363,6 +365,8 @@ int main (int argc, char **argv)
    __parsec_bench_begin(__parsec_blackscholes);
 #endif
 
+    printf("STEP 2\n");
+
     pthread_mutex_init(&counterMutex, NULL);
 
    if (argc != 4)
@@ -374,18 +378,25 @@ int main (int argc, char **argv)
     char *inputFile = argv[2];
     char *outputFile = argv[3];
 
+    printf("STEP 4\n");
+
     //Read input data from file
     file = fopen(inputFile, "r");
     if(file == NULL) {
       printf("ERROR: Unable to open file `%s'.\n", inputFile);
       exit(1);
     }
+
+    printf("STEP 5\n");
+
     rv = fscanf(file, "%i", &numOptions);
     if(rv != 1) {
       printf("ERROR: Unable to read from file `%s'.\n", inputFile);
       fclose(file);
       exit(1);
     }
+
+    printf("STEP 1\n");
 
 
     if(nThreads > numOptions) {
